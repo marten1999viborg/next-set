@@ -65,18 +65,38 @@ button { cursor: pointer; }
   overflow: hidden;
   position: relative;
 }
-.hero:after {
-  content: "";
+
+.hero-graph {
   position: absolute;
-  width: 170px;
-  height: 220px;
-  right: 36px;
-  bottom: -40px;
-  border-radius: 48% 48% 35% 35%;
-  background: linear-gradient(180deg, #030303, #0c0c0c);
-  filter: drop-shadow(0 0 42px rgba(200,255,0,.23));
-  opacity: .92;
+  inset: 20px 18px 18px 42%;
+  z-index: 0;
+  opacity: .82;
+  pointer-events: none;
 }
+.hero-graph svg { width: 100%; height: 100%; display:block; overflow: visible; }
+.hero-graph .hero-grid { stroke: rgba(255,255,255,.075); stroke-width: 1; }
+.hero-graph .hero-line {
+  fill: none;
+  stroke: var(--lime);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 18px rgba(200,255,0,.48));
+}
+.hero-graph .hero-area { fill: rgba(200,255,0,.11); }
+.hero-graph .hero-dot { fill: var(--lime); stroke: rgba(5,5,5,.95); stroke-width: 4; }
+.hero-graph .hero-orb { fill: rgba(200,255,0,.12); filter: blur(1px); }
+.hero-graph:before {
+  content: "";
+  position:absolute;
+  inset: 0;
+  background: radial-gradient(circle at 65% 42%, rgba(200,255,0,.20), transparent 48%);
+  filter: blur(18px);
+}
+@media (max-width: 380px) {
+  .hero-graph { inset: 34px 12px 24px 45%; opacity: .72; }
+}
+
 .topbar { display:none; }
 .avatar, .icon-circle { display:none; }
 .hello { margin-top: 62px; font-size: 45px; line-height: .96; letter-spacing: -.06em; position:relative; z-index:1; }

@@ -122,6 +122,43 @@ function nextTrainingDay(){
 function emptyProgramCard(){
   return `<div class="card wide empty-state"><div class="label">Next workout</div><h2>Build your program</h2><p class="sub">Add at least one exercise before you start logging workouts.</p><button class="btn" onclick="setTab('program')">Add exercise</button></div>`;
 }
+
+function heroProgressGraph(){
+  const names = [...new Set(programExercises().map(e => e.name))];
+  let history = [];
+  for (const name of names) {
+    const h = exerciseHistory(name);
+    if (h.length > history.length) history = h;
+  }
+  const values = history.length >= 2
+    ? history.slice(-5).map(h => h.estimatedOneRepMax)
+    : [72, 75, 79, 82, 86];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const width = 190;
+  const height = 150;
+  const padX = 14;
+  const padY = 22;
+  const step = (width - padX * 2) / Math.max(1, values.length - 1);
+  const points = values.map((v, i) => {
+    const x = padX + i * step;
+    const y = height - padY - ((v - min) / range) * (height - padY * 2);
+    return { x, y, v };
+  });
+  const line = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${padX},${height-padY} ${line} ${width-padX},${height-padY}`;
+  return `<div class="hero-graph" aria-hidden="true"><svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+    <circle class="hero-orb" cx="128" cy="62" r="60"></circle>
+    <line class="hero-grid" x1="10" y1="42" x2="180" y2="42"></line>
+    <line class="hero-grid" x1="10" y1="84" x2="180" y2="84"></line>
+    <line class="hero-grid" x1="10" y1="126" x2="180" y2="126"></line>
+    <polygon class="hero-area" points="${area}"></polygon>
+    <polyline class="hero-line" points="${line}"></polyline>
+    ${points.map(p => `<circle class="hero-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5"></circle>`).join('')}
+  </svg></div>`;
+}
+
 function homeScreen(){
   const lw = lastWorkout();
   const week = weekWorkouts();
@@ -136,6 +173,7 @@ function homeScreen(){
     ? `<div class="card wide"><div class="label">Next target</div><div class="value">${firstEx.name}</div><p class="sub">${rec.text}. ${rec.reason}</p><div class="progress-line" style="--w:72%"><span></span></div></div>`
     : `<div class="card wide"><div class="label">Next target</div><div class="value">No exercise yet</div><p class="sub">Add exercises in Program to unlock targets and strength graphs.</p><div class="progress-line" style="--w:0%"><span></span></div></div>`;
   return `<section class="hero">
+    ${heroProgressGraph()}
     <div class="hello">Hello<br>Martin</div>
     <div class="hero-pills"><span class="pill">${week.length} workouts this week</span><span class="pill">${total.toLocaleString('da-DK')} kg volume</span></div>
   </section>
