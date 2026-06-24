@@ -109,35 +109,60 @@ function nav(){
     <button class="${state.activeTab==='progress'?'active':''}" onclick="setTab('progress')">Progress</button>
   </nav>`;
 }
+function programExercises(){
+  const p = activeProgram();
+  return (p?.days || []).flatMap(day => (day.exercises || []).map(ex => ({ ...ex, dayName: day.name, dayId: day.id })));
+}
+function nextTrainingDay(){
+  const p = activeProgram();
+  const daysWithExercises = (p?.days || []).filter(day => (day.exercises || []).length > 0);
+  if (!daysWithExercises.length) return null;
+  return daysWithExercises[weekWorkouts().length % daysWithExercises.length];
+}
+function emptyProgramCard(){
+  return `<div class="card wide empty-state"><div class="label">Next workout</div><h2>Build your program</h2><p class="sub">Add at least one exercise before you start logging workouts.</p><button class="btn" onclick="setTab('program')">Add exercise</button></div>`;
+}
 function homeScreen(){
   const lw = lastWorkout();
   const week = weekWorkouts();
   const total = week.reduce((s,w)=>s+volume(w),0);
-  const p = activeProgram();
-  const nextDay = p.days[week.length % p.days.length];
-  const firstEx = nextDay.exercises[0];
-  const rec = recommendation(firstEx);
+  const nextDay = nextTrainingDay();
+  const firstEx = nextDay ? nextDay.exercises[0] : null;
+  const rec = firstEx ? recommendation(firstEx) : null;
+  const nextWorkoutCard = nextDay
+    ? `<div class="card wide list-card"><div><div class="label">Next workout</div><h2>${nextDay.name}</h2><p class="sub">${nextDay.exercises.length} exercises ready</p></div><button class="btn" onclick="openDayPicker()">Start</button></div>`
+    : emptyProgramCard();
+  const nextTargetCard = firstEx
+    ? `<div class="card wide"><div class="label">Next target</div><div class="value">${firstEx.name}</div><p class="sub">${rec.text}. ${rec.reason}</p><div class="progress-line" style="--w:72%"><span></span></div></div>`
+    : `<div class="card wide"><div class="label">Next target</div><div class="value">No exercise yet</div><p class="sub">Add exercises in Program to unlock targets and strength graphs.</p><div class="progress-line" style="--w:0%"><span></span></div></div>`;
   return `<section class="hero">
     <div class="hello">Hello<br>Martin</div>
     <div class="hero-pills"><span class="pill">${week.length} workouts this week</span><span class="pill">${total.toLocaleString('da-DK')} kg volume</span></div>
   </section>
   <section class="card-grid">
-    <div class="card wide list-card">
-      <div><div class="label">Next workout</div><h2>${nextDay.name}</h2><p class="sub">${nextDay.exercises.length} exercises ready</p></div>
-      <button class="btn" onclick="openDayPicker()">Start</button>
-    </div>
-    <div class="card wide"><div class="label">Next target</div><div class="value">${firstEx.name}</div><p class="sub">${rec.text}. ${rec.reason}</p><div class="progress-line" style="--w:72%"><span></span></div></div>
+    ${nextWorkoutCard}
+    ${nextTargetCard}
     <div class="card"><div class="label">Last session</div><div class="value">${lw ? lw.dayName : 'None'}</div><p class="sub">${lw ? volume(lw).toLocaleString('da-DK') + ' kg' : 'Start your first workout'}</p></div>
     <div class="card"><div class="label">This week</div><div class="value">${week.length}/4</div><p class="sub">Workouts completed</p></div>
   </section>`;
 }
 function openDayPicker(){
-  const days = activeProgram().days.map(d => `<button class="card list-card" onclick="startWorkout('${d.id}')"><div><h3>${d.name}</h3><p class="sub">${d.exercises.length} exercises</p></div><span class="chev">Start</span></button>`).join('');
+  const trainingDays = (activeProgram().days || []).filter(d => (d.exercises || []).length > 0);
+  const days = trainingDays.length
+    ? trainingDays.map(d => `<button class="card list-card" onclick="startWorkout('${d.id}')"><div><h3>${d.name}</h3><p class="sub">${d.exercises.length} exercises</p></div><span class="chev">Start</span></button>`).join('')
+    : `<div class="empty">Add at least one exercise before starting a workout.</div><button class="btn" onclick="closeModal(); setTab('program')">Go to Program</button>`;
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-title"><h2>Choose your day</h2><button class="btn secondary" onclick="closeModal()">Close</button></div><div class="stack">${days}</div></div></div>`);
 }
 function closeModal(){ const m = qs('modal'); if(m) m.remove(); }
 function startWorkout(dayId){
   const day = activeProgram().days.find(d => d.id === dayId);
+  if (!day || !(day.exercises || []).length) {
+    closeModal();
+    state.activeTab = "program";
+    save();
+    render();
+    return;
+  }
   state.currentWorkout = {
     id: uid(),
     dayId: day.id,
@@ -296,10 +321,10 @@ function chartForExercise(name){
   </svg></div><div class="stat-row"><div class="stat-pill"><strong>${current.estimatedOneRepMax} kg</strong><span>Est. 1RM nu</span></div><div class="stat-pill"><strong>${delta >= 0 ? '+' : ''}${delta} kg</strong><span>Udvikling</span></div><div class="stat-pill"><strong>${best} kg</strong><span>Bedste</span></div></div>`;
 }
 function progressScreen(){
-  const names = [...new Set(activeProgram().days.flatMap(d => d.exercises.map(e => e.name)))];
+  const names = [...new Set(programExercises().map(e => e.name))];
   return `<div class="screen-head"><div><p class="label">Progress</p><h1>Strength graphs</h1></div></div>
   <div class="stack">${names.length ? names.map(name => {
-    const ex = activeProgram().days.flatMap(d=>d.exercises).find(e=>e.name===name);
+    const ex = programExercises().find(e=>e.name===name);
     const last = lastExerciseSets(name);
     const rec = recommendation(ex);
     return `<div class="card wide chart-card"><div class="list-card"><div><h2>${name}</h2><p class="sub">Last: ${last ? last.map(s=>`${s.weight} x ${s.reps}`).join(', ') : 'No logs yet'}</p></div><span class="badge">Next</span></div><div class="value">${rec.text}</div><p class="sub">${rec.reason}</p>${chartForExercise(name)}</div>`;
