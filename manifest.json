@@ -2,8 +2,9 @@
   "name": "Next Set",
   "short_name": "Next Set",
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#050505",
-  "theme_color": "#C8FF00",
+  "theme_color": "#050505",
   "icons": []
 }
