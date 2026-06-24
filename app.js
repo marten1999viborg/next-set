@@ -1,3 +1,13 @@
+document.addEventListener("gesturestart", function(event){ event.preventDefault(); }, { passive: false });
+document.addEventListener("gesturechange", function(event){ event.preventDefault(); }, { passive: false });
+document.addEventListener("gestureend", function(event){ event.preventDefault(); }, { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener("touchend", function(event){
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) event.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
 const STORAGE_KEY = "next-set-v1";
 function uid(){
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -108,7 +118,6 @@ function homeScreen(){
   const firstEx = nextDay.exercises[0];
   const rec = recommendation(firstEx);
   return `<section class="hero">
-    <div class="topbar"><div class="avatar"></div><div class="icon-circle">◌</div></div>
     <div class="hello">Hello<br>Martin</div>
     <div class="hero-pills"><span class="pill">${week.length} workouts this week</span><span class="pill">${total.toLocaleString('da-DK')} kg volume</span></div>
   </section>
@@ -232,14 +241,68 @@ function deleteExercise(dayId, exId){
   }
 }
 }
+
+function exerciseHistory(name){
+  return state.workouts
+    .map((workout, index) => {
+      const ex = (workout.exercises || []).find(e => e.name === name);
+      if (!ex) return null;
+      const sets = (ex.loggedSets || []).map(s => ({ weight: safeNumber(s.weight), reps: safeNumber(s.reps) })).filter(s => s.weight > 0 && s.reps > 0);
+      if (!sets.length) return null;
+      const bestSet = sets.reduce((best, set) => {
+        const setScore = set.weight * (1 + set.reps / 30);
+        const bestScore = best.weight * (1 + best.reps / 30);
+        return setScore > bestScore ? set : best;
+      }, sets[0]);
+      const estimatedOneRepMax = Math.round(bestSet.weight * (1 + bestSet.reps / 30) * 10) / 10;
+      const date = workout.finishedAt || workout.startedAt || new Date().toISOString();
+      return { index: index + 1, date, label: new Date(date).toLocaleDateString('da-DK', { day: '2-digit', month: '2-digit' }), weight: bestSet.weight, reps: bestSet.reps, estimatedOneRepMax };
+    })
+    .filter(Boolean)
+    .slice(-8);
+}
+function chartForExercise(name){
+  const history = exerciseHistory(name);
+  if (history.length < 2) {
+    return `<div class="chart-wrap"><div class="empty" style="height:100%; display:grid; place-items:center; border:0">Log mindst 2 træninger for at se graf.</div></div>`;
+  }
+  const values = history.map(h => h.estimatedOneRepMax);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const width = 320;
+  const height = 140;
+  const padX = 18;
+  const padY = 18;
+  const step = (width - padX * 2) / Math.max(1, history.length - 1);
+  const points = history.map((h, i) => {
+    const x = padX + i * step;
+    const y = height - padY - ((h.estimatedOneRepMax - min) / range) * (height - padY * 2);
+    return { ...h, x, y };
+  });
+  const line = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${padX},${height-padY} ${line} ${width-padX},${height-padY}`;
+  const current = history[history.length - 1];
+  const first = history[0];
+  const delta = Math.round((current.estimatedOneRepMax - first.estimatedOneRepMax) * 10) / 10;
+  const best = Math.max(...values);
+  return `<div class="chart-wrap"><svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Styrkegraf for ${name}">
+    <line class="chart-grid" x1="18" y1="34" x2="302" y2="34"></line>
+    <line class="chart-grid" x1="18" y1="72" x2="302" y2="72"></line>
+    <line class="chart-grid" x1="18" y1="110" x2="302" y2="110"></line>
+    <polygon class="chart-area" points="${area}"></polygon>
+    <polyline class="chart-line" points="${line}"></polyline>
+    ${points.map(p => `<circle class="chart-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4"><title>${p.label}: ${p.estimatedOneRepMax} kg est. 1RM</title></circle>`).join('')}
+  </svg></div><div class="stat-row"><div class="stat-pill"><strong>${current.estimatedOneRepMax} kg</strong><span>Est. 1RM nu</span></div><div class="stat-pill"><strong>${delta >= 0 ? '+' : ''}${delta} kg</strong><span>Udvikling</span></div><div class="stat-pill"><strong>${best} kg</strong><span>Bedste</span></div></div>`;
+}
 function progressScreen(){
   const names = [...new Set(activeProgram().days.flatMap(d => d.exercises.map(e => e.name)))];
-  return `<div class="screen-head"><div><p class="label">Progress</p><h1>Know what to beat</h1></div></div>
+  return `<div class="screen-head"><div><p class="label">Progress</p><h1>Strength graphs</h1></div></div>
   <div class="stack">${names.length ? names.map(name => {
     const ex = activeProgram().days.flatMap(d=>d.exercises).find(e=>e.name===name);
     const last = lastExerciseSets(name);
     const rec = recommendation(ex);
-    return `<div class="card wide"><div class="list-card"><div><h2>${name}</h2><p class="sub">Last: ${last ? last.map(s=>`${s.weight} x ${s.reps}`).join(', ') : 'No logs yet'}</p></div><span class="badge">Next</span></div><div class="value">${rec.text}</div><p class="sub">${rec.reason}</p></div>`;
+    return `<div class="card wide chart-card"><div class="list-card"><div><h2>${name}</h2><p class="sub">Last: ${last ? last.map(s=>`${s.weight} x ${s.reps}`).join(', ') : 'No logs yet'}</p></div><span class="badge">Next</span></div><div class="value">${rec.text}</div><p class="sub">${rec.reason}</p>${chartForExercise(name)}</div>`;
   }).join('') : `<div class="empty">Add exercises to your program first.</div>`}</div>`;
 }
 try {
