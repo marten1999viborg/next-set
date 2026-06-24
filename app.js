@@ -149,13 +149,8 @@ function heroProgressGraph(){
   const line = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const area = `${padX},${height-padY} ${line} ${width-padX},${height-padY}`;
   return `<div class="hero-graph" aria-hidden="true"><svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-    <circle class="hero-orb" cx="128" cy="62" r="60"></circle>
-    <line class="hero-grid" x1="10" y1="42" x2="180" y2="42"></line>
-    <line class="hero-grid" x1="10" y1="84" x2="180" y2="84"></line>
-    <line class="hero-grid" x1="10" y1="126" x2="180" y2="126"></line>
     <polygon class="hero-area" points="${area}"></polygon>
     <polyline class="hero-line" points="${line}"></polyline>
-    ${points.map(p => `<circle class="hero-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5"></circle>`).join('')}
   </svg></div>`;
 }
 
