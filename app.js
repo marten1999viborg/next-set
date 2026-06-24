@@ -1,23 +1,33 @@
 const STORAGE_KEY = "next-set-v1";
+function uid(){
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.uid();
+  }
+  return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+function safeNumber(value, fallback = 0){
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
 const sampleData = {
   activeTab: "home",
   currentWorkout: null,
   programs: [{
-    id: crypto.randomUUID(),
+    id: uid(),
     name: "Push / Pull / Legs",
     days: [
-      { id: crypto.randomUUID(), name: "Push", exercises: [
-        { id: crypto.randomUUID(), name: "Bench Press", sets: 3, minReps: 6, maxReps: 8, weight: 80, increment: 2.5, notes: "Controlled eccentric" },
-        { id: crypto.randomUUID(), name: "Incline DB Press", sets: 3, minReps: 8, maxReps: 10, weight: 30, increment: 2.5, notes: "" },
-        { id: crypto.randomUUID(), name: "Lateral Raises", sets: 3, minReps: 10, maxReps: 15, weight: 12, increment: 1, notes: "" }
+      { id: uid(), name: "Push", exercises: [
+        { id: uid(), name: "Bench Press", sets: 3, minReps: 6, maxReps: 8, weight: 80, increment: 2.5, notes: "Controlled eccentric" },
+        { id: uid(), name: "Incline DB Press", sets: 3, minReps: 8, maxReps: 10, weight: 30, increment: 2.5, notes: "" },
+        { id: uid(), name: "Lateral Raises", sets: 3, minReps: 10, maxReps: 15, weight: 12, increment: 1, notes: "" }
       ]},
-      { id: crypto.randomUUID(), name: "Pull", exercises: [
-        { id: crypto.randomUUID(), name: "Lat Pulldown", sets: 3, minReps: 8, maxReps: 10, weight: 70, increment: 2.5, notes: "" },
-        { id: crypto.randomUUID(), name: "Seated Row", sets: 3, minReps: 8, maxReps: 10, weight: 65, increment: 2.5, notes: "" }
+      { id: uid(), name: "Pull", exercises: [
+        { id: uid(), name: "Lat Pulldown", sets: 3, minReps: 8, maxReps: 10, weight: 70, increment: 2.5, notes: "" },
+        { id: uid(), name: "Seated Row", sets: 3, minReps: 8, maxReps: 10, weight: 65, increment: 2.5, notes: "" }
       ]},
-      { id: crypto.randomUUID(), name: "Legs", exercises: [
-        { id: crypto.randomUUID(), name: "Squat", sets: 3, minReps: 5, maxReps: 8, weight: 100, increment: 5, notes: "" },
-        { id: crypto.randomUUID(), name: "Romanian Deadlift", sets: 3, minReps: 8, maxReps: 10, weight: 90, increment: 5, notes: "" }
+      { id: uid(), name: "Legs", exercises: [
+        { id: uid(), name: "Squat", sets: 3, minReps: 5, maxReps: 8, weight: 100, increment: 5, notes: "" },
+        { id: uid(), name: "Romanian Deadlift", sets: 3, minReps: 8, maxReps: 10, weight: 90, increment: 5, notes: "" }
       ]}
     ]
   }],
@@ -25,10 +35,19 @@ const sampleData = {
 };
 let state = load();
 function load(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : sampleData;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : sampleData;
+  } catch (error) {
+    console.warn("Next Set reset local data after a load error", error);
+    localStorage.removeItem(STORAGE_KEY);
+    return sampleData;
+  }
 }
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function save(){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (error) { console.warn("Next Set could not save locally", error); }
+}
 function qs(id){ return document.getElementById(id); }
 function volume(workout){
   if(!workout) return 0;
@@ -57,7 +76,15 @@ function recommendation(ex){
     reason: allTop ? "Progress. You hit the top of the range." : "Hold. Beat last time."
   };
 }
-function setTab(tab){ state.activeTab = tab; save(); render(); }
+function setTab(tab){ state.activeTab = tab; save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+} }
 function activeProgram(){ return state.programs[0]; }
 function render(){
   const app = qs("app");
@@ -103,13 +130,21 @@ function closeModal(){ const m = qs('modal'); if(m) m.remove(); }
 function startWorkout(dayId){
   const day = activeProgram().days.find(d => d.id === dayId);
   state.currentWorkout = {
-    id: crypto.randomUUID(),
+    id: uid(),
     dayId: day.id,
     dayName: day.name,
     startedAt: new Date().toISOString(),
     exercises: day.exercises.map(ex => ({ ...ex, loggedSets: Array.from({length: Number(ex.sets)}, (_,i)=>({ setNumber: i+1, weight: recommendation(ex).weight, reps: "" })) }))
   };
-  closeModal(); save(); render();
+  closeModal(); save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+}
 }
 function workoutScreen(){
   const w = state.currentWorkout;
@@ -129,9 +164,25 @@ function finishWorkout(){
   w.finishedAt = new Date().toISOString();
   state.workouts.push(w);
   state.currentWorkout = null;
-  save(); render();
+  save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
 }
-function cancelWorkout(){ state.currentWorkout = null; save(); render(); }
+}
+function cancelWorkout(){ state.currentWorkout = null; save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+} }
 function programScreen(){
   const p = activeProgram();
   return `<div class="screen-head"><div><p class="label">Your program</p><h1>${p.name}</h1></div><button class="btn" onclick="openDayForm()">Add day</button></div>
@@ -142,20 +193,44 @@ function openDayForm(){
 }
 function addDay(){
   const name = qs('dayName').value.trim(); if(!name) return;
-  activeProgram().days.push({ id: crypto.randomUUID(), name, exercises: [] }); closeModal(); save(); render();
+  activeProgram().days.push({ id: uid(), name, exercises: [] }); closeModal(); save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+}
 }
 function openExerciseForm(dayId){
   document.body.insertAdjacentHTML('beforeend', `<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-title"><h2>New exercise</h2><button class="btn secondary" onclick="closeModal()">Close</button></div><div class="stack"><input id="exName" placeholder="Bench Press"/><div class="form-grid"><input id="sets" inputmode="numeric" placeholder="Sets" value="3"/><input id="weight" inputmode="decimal" placeholder="Weight"/></div><div class="form-grid"><input id="minReps" inputmode="numeric" placeholder="Min reps" value="6"/><input id="maxReps" inputmode="numeric" placeholder="Max reps" value="8"/></div><input id="increment" inputmode="decimal" placeholder="Increment" value="2.5"/><button class="btn" onclick="addExercise('${dayId}')">Save exercise</button></div></div></div>`);
 }
 function addExercise(dayId){
   const day = activeProgram().days.find(d => d.id === dayId);
-  const ex = { id: crypto.randomUUID(), name: qs('exName').value.trim(), sets: qs('sets').value || 3, minReps: qs('minReps').value || 6, maxReps: qs('maxReps').value || 8, weight: Number(qs('weight').value || 0), increment: Number(qs('increment').value || 2.5), notes: "" };
+  const ex = { id: uid(), name: qs('exName').value.trim(), sets: qs('sets').value || 3, minReps: qs('minReps').value || 6, maxReps: qs('maxReps').value || 8, weight: Number(qs('weight').value || 0), increment: Number(qs('increment').value || 2.5), notes: "" };
   if(!ex.name) return;
-  day.exercises.push(ex); closeModal(); save(); render();
+  day.exercises.push(ex); closeModal(); save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+}
 }
 function deleteExercise(dayId, exId){
   const day = activeProgram().days.find(d=>d.id===dayId);
-  day.exercises = day.exercises.filter(e=>e.id!==exId); save(); render();
+  day.exercises = day.exercises.filter(e=>e.id!==exId); save(); try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+}
 }
 function progressScreen(){
   const names = [...new Set(activeProgram().days.flatMap(d => d.exercises.map(e => e.name)))];
@@ -167,4 +242,12 @@ function progressScreen(){
     return `<div class="card wide"><div class="list-card"><div><h2>${name}</h2><p class="sub">Last: ${last ? last.map(s=>`${s.weight} x ${s.reps}`).join(', ') : 'No logs yet'}</p></div><span class="badge">Next</span></div><div class="value">${rec.text}</div><p class="sub">${rec.reason}</p></div>`;
   }).join('') : `<div class="empty">Add exercises to your program first.</div>`}</div>`;
 }
-render();
+try {
+  render();
+} catch (error) {
+  console.error("Next Set render error", error);
+  const app = document.getElementById("app");
+  if (app) {
+    app.innerHTML = `<div class="card wide" style="margin-top:24px"><h1>Next Set</h1><p class="sub">Appen kunne ikke indlæse korrekt. Prøv at opdatere siden eller ryd browserdata for dette site.</p><button class="btn" onclick="localStorage.removeItem('next-set-v1'); location.reload();">Reset app</button></div>`;
+  }
+}
